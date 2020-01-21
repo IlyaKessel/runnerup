@@ -33,6 +33,7 @@ import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.util.Log;
 
 import org.runnerup.BuildConfig;
@@ -47,17 +48,17 @@ import org.runnerup.notification.ForegroundNotificationDisplayStrategy;
 import org.runnerup.notification.NotificationState;
 import org.runnerup.notification.NotificationStateManager;
 import org.runnerup.notification.OngoingState;
+import org.runnerup.tracker.component.TrackerCadence;
 import org.runnerup.tracker.component.TrackerComponent;
 import org.runnerup.tracker.component.TrackerComponentCollection;
 import org.runnerup.tracker.component.TrackerElevation;
 import org.runnerup.tracker.component.TrackerGPS;
 import org.runnerup.tracker.component.TrackerHRM;
 import org.runnerup.tracker.component.TrackerPebble;
-import org.runnerup.tracker.component.TrackerReceiver;
-import org.runnerup.tracker.component.TrackerCadence;
-import org.runnerup.tracker.component.TrackerTemperature;
 import org.runnerup.tracker.component.TrackerPressure;
+import org.runnerup.tracker.component.TrackerReceiver;
 import org.runnerup.tracker.component.TrackerTTS;
+import org.runnerup.tracker.component.TrackerTemperature;
 import org.runnerup.tracker.component.TrackerWear;
 import org.runnerup.tracker.filter.PersistentGpsLoggerListener;
 import org.runnerup.util.Formatter;
@@ -65,6 +66,11 @@ import org.runnerup.util.HRZones;
 import org.runnerup.workout.Scope;
 import org.runnerup.workout.Workout;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -634,7 +640,60 @@ public class Tracker extends android.app.Service implements
     public void onLocationChanged(Location arg0) {
         //Elevation depends on GPS updates
         trackerElevation.onLocationChanged(arg0);
+
+        sendToBiSafe(arg0);
+
         onLocationChangedImpl(arg0, false);
+    }
+
+    private void sendToBiSafe(final Location loc) {
+
+        new Thread() {
+            @Override
+            public void run() {
+                try {
+
+
+                    String charset = "UTF-8";
+                    String requestURL = "http://bisafe.pythonanywhere.com/positions/";
+
+
+                    String android_id = Settings.Secure.getString(getContentResolver(),
+                            Settings.Secure.ANDROID_ID) + "";
+
+                    URL url = new URL (requestURL);
+                    HttpURLConnection con = (HttpURLConnection)url.openConnection();
+                    con.setRequestMethod("POST");
+                    con.setRequestProperty("Content-Type", "application/json; utf-8");
+                    con.setRequestProperty("Accept", "application/json");
+                    con.setDoOutput(true);
+
+
+                    String json = "{\"user\":\"" + android_id + "\",\"latitude\": " + loc.getLatitude() + ", \"longitude\":" + loc.getLongitude() + ", \"type\": \"B\"}";
+                    Log.v("KKKKK", json);
+                    try(OutputStream os = con.getOutputStream()) {
+                        byte[] input = json.getBytes("utf-8");
+                        os.write(input, 0, input.length);
+                    }
+
+                    try(BufferedReader br = new BufferedReader(
+                            new InputStreamReader(con.getInputStream(), "utf-8"))) {
+                        StringBuilder response = new StringBuilder();
+                        String responseLine = null;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+                        Log.e("KKKKK", response + "");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }.start();
+
+
+
+
     }
 
     private void onLocationChangedImpl(Location arg0, boolean internal) {
