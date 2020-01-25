@@ -44,7 +44,7 @@ android {
     productFlavors {
         latest {
             dimension "all"
-            minSdkVersion 15
+            minSdkVersion 16
             compileSdkVersion rootProject.ext.compileSdkVersion
             targetSdkVersion rootProject.ext.targetSdkVersion
             versionName rootProject.ext.versionName
@@ -133,6 +133,7 @@ dependencies {
     latestImplementation 'com.mapbox.mapboxsdk:mapbox-android-plugin-annotation-v8:0.7.0'
     latestImplementation 'com.mapbox.mapboxsdk:mapbox-android-plugin-scalebar-v8:0.2.0'
     latestImplementation 'com.jjoe64:graphview:4.2.2'
+    latestImplementation 'com.googlecode.json-simple:json-simple:1.1'
 
     testImplementation "junit:junit:${rootProject.ext.junitVersion}"
     testImplementation "org.mockito:mockito-core:${rootProject.ext.mockitoVersion}"

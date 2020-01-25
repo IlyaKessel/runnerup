@@ -17,25 +17,39 @@
 
 package org.runnerup.tracker;
 
+import org.json.simple.JSONArray;
+import org.json.simple.parser.JSONParser;
+import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.database.sqlite.SQLiteDatabase;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.widget.Toast;
 
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
+
+import org.json.simple.JSONObject;
 import org.runnerup.BuildConfig;
 import org.runnerup.R;
 import org.runnerup.common.tracker.TrackerState;
@@ -67,6 +81,10 @@ import org.runnerup.workout.Scope;
 import org.runnerup.workout.Workout;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -89,6 +107,7 @@ public class Tracker extends android.app.Service implements
         LocationListener, Constants {
     private static final int MAX_HR_AGE = 3000; // 3s
     private static final long NANO_IN_MILLI = 1000000;
+    private static final long PERIOD = 1000 ;
 
     private final Handler handler = new Handler();
 
@@ -153,6 +172,8 @@ public class Tracker extends android.app.Service implements
             // >= 4.1
             trackerPebble = (TrackerPebble) components.addComponent(new TrackerPebble(this));
         }
+
+
     }
 
     @Override
@@ -636,10 +657,16 @@ public class Tracker extends android.app.Service implements
         return mActivityId;
     }
 
+    long prev = System.currentTimeMillis();
+
     @Override
     public void onLocationChanged(Location arg0) {
         //Elevation depends on GPS updates
         trackerElevation.onLocationChanged(arg0);
+
+        if((System.currentTimeMillis() - prev) < PERIOD){
+            prev = System.currentTimeMillis();
+        }
 
         sendToBiSafe(arg0);
 
@@ -648,7 +675,10 @@ public class Tracker extends android.app.Service implements
 
     private void sendToBiSafe(final Location loc) {
 
+
+
         new Thread() {
+
             @Override
             public void run() {
                 try {
@@ -685,15 +715,52 @@ public class Tracker extends android.app.Service implements
                         }
                         Log.e("KKKKK", response + "");
                     }
+
+                    String data = "{\"user\":\"" + android_id + "\",\"latitude\": " + loc.getLatitude() + ", \"longitude\":" + loc.getLongitude() + "\",\"timestamp\": " + System.currentTimeMillis() + ", \"type\": \"B\"}";
+                    saveData(getApplicationContext(), data);
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         }.start();
 
+    }
 
+    private void saveData(Context mcoContext, String data){
+        System.out.println("-----------------Saving data: " + data);
+        String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/bisafe";
+        File dir = new File(path);
+        dir.mkdirs();
 
+        try{
+            File file = new File(dir, "bisafedata.json");
+            JSONArray records = null;
+            JSONObject json = null;
+            if(!file.exists()){
+                records = new JSONArray();
+                json = new JSONObject();
+                json.put("records", records);
+            }else{
+                // 10MB of text is enough, we don't want to have GB file in case app doesn't stop ...
+                if(file.length() > 10000000){
+                    return;
+                }
 
+                JSONParser parser = new JSONParser();
+                json = (JSONObject) parser.parse(new FileReader(file.getAbsolutePath()));
+                records = (JSONArray) json.get("records");
+            }
+
+            records.add(data);
+
+            FileWriter writer = new FileWriter(file);
+            writer.write(json.toString());
+            writer.flush();
+            writer.close();
+        }catch (Exception e){
+            e.printStackTrace();
+        }
     }
 
     private void onLocationChangedImpl(Location arg0, boolean internal) {
@@ -1029,4 +1096,7 @@ public class Tracker extends android.app.Service implements
     public Workout getWorkout() {
         return workout;
     }
+
+
+
 }
