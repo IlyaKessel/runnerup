@@ -92,6 +92,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 
 /**
  * GpsTracker - this class tracks Location updates
@@ -717,7 +718,7 @@ public class Tracker extends android.app.Service implements
                     }
 
                     String data = "{\"user\":\"" + android_id + "\",\"latitude\": " + loc.getLatitude() + ", \"longitude\":" + loc.getLongitude() + "\",\"timestamp\": " + System.currentTimeMillis() + ", \"type\": \"B\"}";
-                    saveData(getApplicationContext(), data);
+                    saveData(getApplicationContext(), json);
 
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -755,7 +756,7 @@ public class Tracker extends android.app.Service implements
             records.add(data);
 
             FileWriter writer = new FileWriter(file);
-            writer.write(json.toString());
+            writer.write(json.toJSONString());
             writer.flush();
             writer.close();
         }catch (Exception e){
@@ -1097,6 +1098,94 @@ public class Tracker extends android.app.Service implements
         return workout;
     }
 
+    static HttpURLConnection getConnection() throws IOException {
+        URL url = new URL ("http://bisafe.pythonanywhere.com/positions/");
+        HttpURLConnection con = (HttpURLConnection)url.openConnection();
+
+        con.setRequestMethod("POST");
+        con.setRequestProperty("Content-Type", "application/json; utf-8");
+        con.setRequestProperty("Accept", "application/json");
+        con.setDoOutput(true);
+
+        return con;
+    }
+    public static void main(String[] args) {
+
+        Random random = new Random();
+        final int RIDERS = 10;
+
+
+
+        JSONParser parser = new JSONParser();
+
+        try{
+            File file = new File("bisafedata.json");
+            if(!file.exists()){
+                throw new RuntimeException("jopppa no file " + file.getAbsolutePath());
+            }
+            JSONObject json = (JSONObject) parser.parse(new FileReader(file.getAbsolutePath()));
+            JSONArray records = (JSONArray) json.get("records");
+
+            // lets place #RIDERS of awesome Joes on the map. Our json array should be sorted
+            int[] riders = new int[RIDERS];
+            for (int i = 0; i < RIDERS; i++) {
+                riders[i] = random.nextInt(records.size());
+            }
+
+            // now when we have our awesome riders starting points, we can update their location on the map
+
+
+            // Lets ride...
+
+            // Now we need to iterate over our cool riders records to simulate their callories loss
+            while(true){
+                Thread.sleep(1000);
+
+                 for (int i = 0; i < riders.length; i++) {
+                    HttpURLConnection con = getConnection();
+                    int iRider = riders[i];
+                    String record = (String) records.get(iRider);
+
+                    System.out.println("Record before: " + record);
+
+                    // Now we mock user id
+                     JSONParser jsonParser=new  JSONParser();
+                     JSONObject jsRecord = (JSONObject) jsonParser.parse(record);
+                     jsRecord.put("user", i);
+
+                     record = jsRecord.toJSONString();
+                    System.out.println("Record after: " + record);
+
+                    // trying to send..
+                    try(OutputStream os = con.getOutputStream()) {
+                        byte[] input = record.getBytes("utf-8");
+                        os.write(input, 0, input.length);
+                        os.flush();
+                    }
+
+                    // reading response
+                    InputStreamReader isr = new InputStreamReader(con.getInputStream(), "utf-8");
+                    try(BufferedReader br = new BufferedReader(isr)) {
+                        StringBuilder response = new StringBuilder();
+                        String responseLine = null;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        System.out.println("response: " + response);
+                        isr.close();
+                    }
+                }
+
+                // lets move our riders to next position
+                for (int i = 0; i < riders.length; i++) {
+                        riders[i] = riders[i] + 1 >= records.size() ? 0 : riders[i] + 1;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
 
 }
